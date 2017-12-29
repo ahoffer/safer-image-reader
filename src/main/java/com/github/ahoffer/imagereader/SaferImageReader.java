@@ -1,6 +1,7 @@
 package com.github.ahoffer.imagereader;
 
 import java.awt.image.BufferedImage;
+import java.io.BufferedInputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
@@ -24,24 +25,27 @@ public class SaferImageReader implements AutoCloseable {
   // allow the entire image to be decoded later.
   // TODO: It seems like 1K should be enough buffer to read metadata, but I really don't know.
   public static final int READLIMIT = 1024 * 4;
+  protected int imageIndex;
+  protected InputStream inputStream;
   ImageInputStream iis;
   ImageReader reader;
   ImageReaderSpi imageReaderSpi;
-  InputStream inputStream;
   ImageReadParam readParam;
-  protected int imageIndex;
 
   public SaferImageReader(InputStream inputStream) {
+    setImageIndex(0);
+
     if (inputStream == null) {
       throw new ImageReaderError("Input stream cannot be null");
     }
 
-    if (!inputStream.markSupported()) {
-      throw new ImageReaderError("Input stream must support mark and reset");
+    if (inputStream.markSupported()) {
+      setInputStream(inputStream);
+    } else {
+      setInputStream(new BufferedInputStream(inputStream));
     }
-    this.inputStream = inputStream;
-    inputStream.mark(READLIMIT);
-    setImageIndex(0);
+
+    getInputStream().mark(READLIMIT);
   }
 
   public List<String> getMimeTypes() {
@@ -154,7 +158,7 @@ public class SaferImageReader implements AutoCloseable {
   ImageInputStream getImageInputStream() throws IOException {
     if (iis == null) {
       File tempDirectory = Files.createTempDirectory(UUID.randomUUID().toString()).toFile();
-      iis = new FileCacheImageInputStream(inputStream, tempDirectory);
+      iis = new FileCacheImageInputStream(getInputStream(), tempDirectory);
     }
     return iis;
   }
@@ -176,7 +180,7 @@ public class SaferImageReader implements AutoCloseable {
     if (reader == null) {
       try {
         reader = getImageReaderSpi().createReaderInstance();
-        reader.setInput(ImageIO.createImageInputStream(inputStream));
+        reader.setInput(ImageIO.createImageInputStream(getInputStream()));
       } catch (IOException e) {
         throw new ImageReaderError(e);
       }
@@ -186,7 +190,7 @@ public class SaferImageReader implements AutoCloseable {
 
   void resetInputStream() {
     try {
-      inputStream.reset();
+      getInputStream().reset();
     } catch (IOException e) {
       throw new ImageReaderError(e);
     }
@@ -203,6 +207,14 @@ public class SaferImageReader implements AutoCloseable {
 
   public void setImageIndex(int imageIndex) {
     this.imageIndex = imageIndex;
+  }
+
+  protected InputStream getInputStream() {
+    return inputStream;
+  }
+
+  protected void setInputStream(InputStream inputStream) {
+    this.inputStream = inputStream;
   }
 
   public static class ImageReaderError extends RuntimeException {
