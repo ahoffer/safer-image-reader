@@ -1,7 +1,6 @@
 package com.github.ahoffer.imagereader;
 
 import java.awt.image.BufferedImage;
-import java.io.BufferedInputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
@@ -33,19 +32,17 @@ public class SaferImageReader implements AutoCloseable {
   ImageReadParam readParam;
 
   public SaferImageReader(InputStream inputStream) {
-    setImageIndex(0);
 
     if (inputStream == null) {
       throw new ImageReaderError("Input stream cannot be null");
     }
 
-    if (inputStream.markSupported()) {
-      setInputStream(inputStream);
-    } else {
-      setInputStream(new BufferedInputStream(inputStream));
+    if (!inputStream.markSupported()) {
+      throw new ImageReaderError("Input stream must support mark and reset");
     }
-
+    setInputStream(inputStream);
     getInputStream().mark(READLIMIT);
+    setImageIndex(0);
   }
 
   public List<String> getMimeTypes() {
